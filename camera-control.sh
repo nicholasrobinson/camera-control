@@ -7,8 +7,10 @@
 # April 2015 - voltaikprojekt at thomashof-durlach dot de
 #
 # Arguments:
-# ID: Id of the camera
-# COMMAND: "on" or "off" for activating/deactivating camera with $ID
+# ID:       Id of the camera
+# COMMAND:  "list" for listing cameras
+#           "on" or "off" for activating/deactivating camera with $ID
+#           "door" or "battery" or "privacy" for patrol positioning the camera with $ID
 #
 # e.g.: /path_to_script/script.sh 1 off
 # Deactivates the camera with ID 1
@@ -23,12 +25,13 @@ PIMATIC_VAR="" # a pimatic variable to check if everything went fine, can be use
 PIMATIC_URL="PIMATIC IP:PIMATIC PORT" # with http:// or https://
 PIMATIC_USER=""
 PIMATIV_PASS=""
+SED_COMMAND="sed -E"
 ###############
 
 ## Script, no editing from here on if you don't know what you're doing ;-) ##
 CAMID="$1"
 COMMAND="$2"
-USAGE="\n(De)activates a camera in Synology Diskstation Surveillance Station\n\nUsage: /path_to_script/name_of_script ID COMMAND\n\nArguments:\nID: Id of the camera\nCOMMAND: \"on\" or \"off\" for activating/deactivating camera with $ID\n\ne.g.: /path_to_script/script.sh 1 off\nDeactivates the camera with ID 1\n"
+USAGE="\n(De)activates a camera in Synology Diskstation Surveillance Station\n\nUsage: /path_to_script/name_of_script ID COMMAND <PRESET_ID>\n\nArguments:\nID: \t\tId of the camera\nCOMMAND: \t\"on\" or \"off\" for activating/deactivating camera with $ID\n\t\t\"door\" or \"battery\" or \"privacy\" for patrol positioning the camera with $ID\n\ne.g.: /path_to_script/script.sh 1 off\nDeactivates the camera with ID 1\n"
 
 ## Check for help
 if [[ $1 == "--help" ]]
@@ -48,18 +51,61 @@ fi
 ## Checking on/off command
 shopt -s nocasematch
 
-if [[ "$COMMAND" == "on" ]]
+if [[ "$COMMAND" == "list" ]]
 then
-        METHOD="Enable"
+        API="SYNO.SurveillanceStation.Camera"
+        METHOD="List"
+        COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=3&cameraIds=$CAMID"
 else
-        if [[ "$COMMAND" == "off" ]]
+        if [[ "$COMMAND" == "presets" ]]
         then
-                METHOD="Disable"
+                API="SYNO.SurveillanceStation.PTZ"
+                METHOD="ListPreset"
+                COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID"
         else
-                echo "No command found, exiting!"
-                echo -e $USAGE
-                shopt -u nocasematch
-                exit 1
+                if [[ "$COMMAND" == "on" ]]
+                then
+                        API="SYNO.SurveillanceStation.Camera"
+                        METHOD="Enable"
+                        COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=3&cameraIds=$CAMID"
+                else
+                        if [[ "$COMMAND" == "off" ]]
+                        then
+                                API="SYNO.SurveillanceStation.Camera"
+                                METHOD="Enable"
+                                COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=3&cameraIds=$CAMID"
+                        else
+                                # Patrol commands
+                                if [[ "$COMMAND" == "battery" ]]
+                                then
+                                        API="SYNO.SurveillanceStation.PTZ"
+                                        METHOD="GoPreset"
+                                        PRESET_ID="7"
+                                        COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
+                                else
+                                        if [[ "$COMMAND" == "privacy" ]]
+                                        then
+                                                API="SYNO.SurveillanceStation.PTZ"
+                                                METHOD="GoPreset"
+                                                PRESET_ID="8"
+                                                COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
+                                        else
+                                                if [[ "$COMMAND" == "door" ]]
+                                                then
+                                                        API="SYNO.SurveillanceStation.PTZ"
+                                                        METHOD="GoPreset"
+                                                        PRESET_ID="6"
+                                                        COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
+                                                else
+                                                        echo "No command found, exiting!"
+                                                        echo -e $USAGE
+                                                        shopt -u nocasematch
+                                                        exit 1
+                                                fi
+                                        fi
+                                fi
+                        fi
+                fi
         fi
 fi
 
@@ -80,10 +126,11 @@ authRsp=$(curl --header "Accept: application/json" \
     $url 2>/dev/null)
 
 ## debug ##
+#curl --header "Accept: application/json" --header "Content-Type: application/x-www-form-urlencoded" --cookie-jar $COOKIE_PATH --user-agent "Mozilla/5.0 (Windows; U; Windows NT 5.0; en-US; rv:1.7.12) Gecko/20050915 Firefox/1.0.7" --referer ";auto" --insecure --location $url
 #echo $authRsp  #> /tmp/dswebapi.json
 #exit 0
 
-result=$(echo $authRsp | sed -r 's/^.*("success":(true|false)).*$/\2/')
+result=$(echo $authRsp | $SED_COMMAND 's/^.*("success":(true|false)).*$/\2/')
 
 ## debug ##
 echo "Trying to login to Diskstation: $result . " #>> /tmp/dswebapi.json
@@ -97,7 +144,7 @@ fi
 
 ## Executing command
 
-url="$WEBAPIURL/entry.cgi?api=SYNO.SurveillanceStation.Camera&method=$METHOD&version=3&cameraIds=$CAMID"
+url=$COMMAND_URL
 
 ## debug ##
 #echo $url  #>> /tmp/dswebapi.json
@@ -112,7 +159,11 @@ camRsp=$(curl --header "Accept: application/json" \
         --location   \
         $url 2>/dev/null)
 
-result=$(echo $camRsp | sed -r 's/^.*("success":(true|false)).*$/\2/')
+## debug ##
+#curl -vvv --header "Accept: application/json" --header "Content-Type: application/x-www-form-urlencoded" --cookie $COOKIE_PATH --user-agent "Mozilla/5.0 (Windows; U; Windows NT 5.0; en-US; rv:1.7.12) Gecko/20050915 Firefox/1.0.7" --referer ";auto" --insecure --location $url
+#exit 0
+
+result=$(echo $camRsp | $SED_COMMAND 's/^.*("success":(true|false)).*$/\2/')
 
 ## debug ##
 echo "Trying to $METHOD camera with id $CAMID: $result . " #>> /tmp/dswebapi.json
@@ -146,7 +197,7 @@ authRsp=$(curl --header "Accept: application/json" \
 ## debug ##
 #echo $authRsp #>> /tmp/curlres.html
 
-result=$(echo $authRsp | sed -r 's/^.*("success":(true|false)).*$/\2/')
+result=$(echo $authRsp | $SED_COMMAND 's/^.*("success":(true|false)).*$/\2/')
 
 ## debug ##
 echo "Trying to logout from Diskstation: $result. " #>> /tmp/dswebapi.json
@@ -172,7 +223,7 @@ then
     ## debug ##
     #echo $pimRsp
 
-    result=$(echo $pimRsp | sed -r 's/^.*("success": (true|false)).*$/\2/')
+    result=$(echo $pimRsp | $SED_COMMAND 's/^.*("success": (true|false)).*$/\2/')
 	
 	## debug ##
     echo "Trying to set variable $PIMATIC_VAR to $camStatus in pimatic: $result. " #>> /tmp/dswebapi.json
