@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 ###################################################################
 #
@@ -21,10 +21,6 @@ WEBAPIURL="https://URL_OF_DISKSTATION:PORT/webapi/" # e.g. https://192.168.1.1:5
 ACCOUNT="ADMIN_ACCOUNT" # e.g. admin
 PASSWD="PASSWORD_OF_ADMIN_ACCOUNT"
 COOKIE_PATH="/PATH_TO_COOKIE/COOKIE_NAME" # e.g. /tmp/webapicookie.txt
-PIMATIC_VAR="" # a pimatic variable to check if everything went fine, can be used for a fallback rule in pimatic / Leave empty for not sending
-PIMATIC_URL="PIMATIC IP:PIMATIC PORT" # with http:// or https://
-PIMATIC_USER=""
-PIMATIV_PASS=""
 SED_COMMAND="sed -E"
 ###############
 
@@ -48,9 +44,7 @@ then
   exit 1
 fi
 
-## Checking on/off command
-shopt -s nocasematch
-
+## Checking commands
 if [[ "$COMMAND" == "list" ]]
 then
         API="SYNO.SurveillanceStation.Camera"
@@ -99,7 +93,6 @@ else
                                                 else
                                                         echo "No command found, exiting!"
                                                         echo -e $USAGE
-                                                        shopt -u nocasematch
                                                         exit 1
                                                 fi
                                         fi
@@ -108,9 +101,6 @@ else
                 fi
         fi
 fi
-
-shopt -u nocasematch
-
 
 ## Login to Diskstation
 
@@ -202,33 +192,6 @@ result=$(echo $authRsp | $SED_COMMAND 's/^.*("success":(true|false)).*$/\2/')
 ## debug ##
 echo "Trying to logout from Diskstation: $result. " #>> /tmp/dswebapi.json
 #exit 0
-
-## Send result to a variable in pimatic
-if [[ $PIMATIC_VAR != "" && ( $result == "true" || $result == "false" ) ]]
-then
-	if [[ ( $METHOD == "Enable" && $changeResult == "true" ) || ( $METHOD == "Disable" && $changeResult == "false" ) ]]
-	then
-	    camStatus=1
-	else
-		camStatus=0
-	fi
-	
-    pimRsp=$(curl --header "Content-Type:application/json" \
-                  --insecure \
-				  -X PATCH 	\
-				  --data '{"type": "value", "valueOrExpression": '"${camStatus}"'}' \
-				  --user "${PIMATIC_USER}:${PIMATIC_PASS}" \
-				  $PIMATIC_URL/api/variables/$PIMATIC_VAR 2>/dev/null)
-				  
-    ## debug ##
-    #echo $pimRsp
-
-    result=$(echo $pimRsp | $SED_COMMAND 's/^.*("success": (true|false)).*$/\2/')
-	
-	## debug ##
-    echo "Trying to set variable $PIMATIC_VAR to $camStatus in pimatic: $result. " #>> /tmp/dswebapi.json
-    #exit 0
-fi
 
 if [[ $result == "false" ]]
 then
