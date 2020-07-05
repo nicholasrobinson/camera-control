@@ -72,7 +72,7 @@ else
                         if [[ "$COMMAND" == "off" ]]
                         then
                                 API="SYNO.SurveillanceStation.Camera"
-                                METHOD="Enable"
+                                METHOD="Disable"
                                 COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=3&cameraIds=$CAMID"
                         else
                                 # Patrol commands
@@ -80,21 +80,21 @@ else
                                 then
                                         API="SYNO.SurveillanceStation.PTZ"
                                         METHOD="GoPreset"
-                                        PRESET_ID="7"
+                                        PRESET_ID="16"
                                         COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
                                 else
                                         if [[ "$COMMAND" == "privacy" ]]
                                         then
                                                 API="SYNO.SurveillanceStation.PTZ"
                                                 METHOD="GoPreset"
-                                                PRESET_ID="8"
+                                                PRESET_ID="18"
                                                 COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
                                         else
                                                 if [[ "$COMMAND" == "door" ]]
                                                 then
                                                         API="SYNO.SurveillanceStation.PTZ"
                                                         METHOD="GoPreset"
-                                                        PRESET_ID="6"
+                                                        PRESET_ID="17"
                                                         COMMAND_URL="$WEBAPIURL/entry.cgi?api=$API&method=$METHOD&version=1&cameraId=$CAMID&presetId=$PRESET_ID"
                                                 else
                                                         echo "No command found, exiting!"
